@@ -1,9 +1,16 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse, AxiosError } from 'axios'
+import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import authService from './auth.service';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5080/api'
 
 class ApiService {
   private api: AxiosInstance
+  private isRefreshing = false;
+
+  private failedRequests: Array<{
+    resolve: (value?: unknown) => void;
+    reject: (reason?: unknown) => void;
+  }> = [];
 
   constructor() {
     this.api = axios.create({
@@ -32,26 +39,55 @@ class ApiService {
 
     // Response interceptor
     this.api.interceptors.response.use(
-      (response: AxiosResponse) => {
-        // Si la respuesta es directamente los datos (ASP.NET Core API)
-        return response
-      },
-      (error: AxiosError) => {
-        const message = error.response?.data || error.message
-        
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token')
-          window.location.href = '/login'
+      (response: AxiosResponse) => response,
+      async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+        // Si es error 401 y no es una petición de login
+        if (error.response?.status === 401 && !originalRequest.url?.includes('/auth/login')) {
+          if (!originalRequest._retry) {
+            originalRequest._retry = true;
+
+            // Limpiar datos de autenticación y redirigir
+            authService.logout();
+            return Promise.reject(new Error('Sesión expirada. Por favor inicie sesión nuevamente.'));
+          }
         }
 
-        console.error('API Error:', message)
+        // Si es error 307 (Temporary Redirect)
+        if (error.response?.status === 307) {
+          // El backend está redirigiendo porque no hay token o es inválido
+          console.warn('Redirección 307 detectada - Token inválido o no proporcionado');
+
+          if (!authService.isAuthenticated()) {
+            window.location.href = '/login';
+            return Promise.reject(new Error('No autenticado. Redirigiendo a login...'));
+          }
+
+          // Si hay token pero aún así redirige, token podría estar expirado
+          authService.logout();
+          return Promise.reject(new Error('Token expirado o inválido. Por favor inicie sesión nuevamente.'));
+        }
+
+        // Otros errores
+        const message = error.response?.data || error.message;
+
+        console.error('API Error:', {
+          status: error.response?.status,
+          url: originalRequest.url,
+          message,
+          data: error.response?.data
+        });
+
         return Promise.reject({
-          message: typeof message === 'string' ? message : 'Error en la solicitud',
+          message: typeof message === 'string'
+            ? message
+            : 'Error en la solicitud',
           status: error.response?.status,
           data: error.response?.data,
-        })
+        });
       }
-    )
+    );
   }
 
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

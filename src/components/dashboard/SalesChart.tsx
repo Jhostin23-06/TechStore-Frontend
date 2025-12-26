@@ -12,12 +12,21 @@ interface SalesChartProps {
 }
 
 const SalesChart: React.FC<SalesChartProps> = ({ sales }) => {
-  // Agrupar ventas por día (últimos 7 días)
+  // DEBUG: Ver qué ventas llegan
+  console.log('🔍 SalesChart - Ventas recibidas:', sales.map(s => ({
+    id: s.id,
+    fecha: s.fecha,
+    formato: dayjs(s.fecha).format('DD/MM/YYYY HH:mm'),
+    hoy: dayjs(s.fecha).isSame(dayjs(), 'day')
+  })))
+
+  // Agrupar ventas por día (últimos 7 días INCLUYENDO HOY)
   const getLast7Days = () => {
     const days = []
     for (let i = 6; i >= 0; i--) {
       days.push(dayjs().subtract(i, 'day').format('DD/MM'))
     }
+    console.log('📅 Últimos 7 días:', days)
     return days
   }
 
@@ -30,20 +39,47 @@ const SalesChart: React.FC<SalesChartProps> = ({ sales }) => {
     totalVentas: 0,
   }))
 
-  // Procesar datos de ventas
+  // Procesar datos de ventas - CORREGIDO
   const chartData = sales.reduce((acc, sale) => {
-    const saleDate = dayjs(sale.fecha).format('DD/MM')
-    const dayIndex = last7Days.indexOf(saleDate)
-    
-    if (dayIndex !== -1) {
-      acc[dayIndex].cantidadVentas += 1
-      acc[dayIndex].totalVentas += sale.total
+    try {
+      // Convertir la fecha de la venta al formato DD/MM
+      const saleDate = dayjs(sale.fecha).format('DD/MM')
+      
+      // Buscar si esta fecha está en los últimos 7 días
+      const dayIndex = last7Days.findIndex(day => day === saleDate)
+      
+      console.log(`📊 Procesando venta ${sale.id}:`, {
+        fechaOriginal: sale.fecha,
+        saleDate,
+        dayIndex,
+        encontrado: dayIndex !== -1
+      })
+      
+      if (dayIndex !== -1) {
+        acc[dayIndex].cantidadVentas += 1
+        acc[dayIndex].totalVentas += sale.total
+      }
+    } catch (error) {
+      console.error('Error procesando venta:', sale, error)
     }
     
     return acc
   }, [...initialData])
 
-  // Formatear tooltip
+  // DEBUG: Ver datos procesados
+  console.log('📈 Datos del gráfico:', chartData)
+
+  // Calcular totales CORREGIDO
+  const totalVentasPeriodo = chartData.reduce((sum, day) => sum + day.cantidadVentas, 0)
+  const totalIngresosPeriodo = chartData.reduce((sum, day) => sum + day.totalVentas, 0)
+
+  console.log('💰 Totales calculados:', {
+    totalVentasPeriodo,
+    totalIngresosPeriodo,
+    ventasHoy: chartData[chartData.length - 1] // Último día (hoy)
+  })
+
+  // Formatear tooltip (sin cambios)
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -63,19 +99,17 @@ const SalesChart: React.FC<SalesChartProps> = ({ sales }) => {
     return null
   }
 
-  // Calcular métricas para mostrar
-  const totalVentasPeriodo = chartData.reduce((sum, day) => sum + day.cantidadVentas, 0)
-  const totalIngresosPeriodo = chartData.reduce((sum, day) => sum + day.totalVentas, 0)
-  const promedioDiario = totalIngresosPeriodo / 7
-
   return (
     <Card 
       title="Ventas de los últimos 7 días" 
       className="h-full"
       extra={
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500 p-3">
           <div>Total período: <strong>{totalVentasPeriodo} ventas</strong></div>
           <div>Ingresos: <strong>S/. {totalIngresosPeriodo.toFixed(2)}</strong></div>
+          <div className="text-xs mt-1">
+            Hoy ({dayjs().format('DD/MM')}): {chartData[chartData.length - 1]?.cantidadVentas || 0} ventas
+          </div>
         </div>
       }
     >
@@ -100,7 +134,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ sales }) => {
           <YAxis 
             yAxisId="right" 
             orientation="right"
-            tickFormatter={(value) => `S/. ${value}`}
+            tickFormatter={(value) => `S/. ${value.toFixed(0)}`}
             tick={{ fill: '#666', fontSize: 12 }}
             label={{ 
               value: 'Total Ventas (S/.)', 
@@ -132,8 +166,6 @@ const SalesChart: React.FC<SalesChartProps> = ({ sales }) => {
           />
         </BarChart>
       </ResponsiveContainer>
-
-      {/* Resumen de métricas */}
     </Card>
   )
 }

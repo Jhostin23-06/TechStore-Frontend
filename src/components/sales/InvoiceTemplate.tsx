@@ -1,7 +1,8 @@
+// InvoiceTemplate.tsx - Versión corregida
 import React from 'react'
 import { Card, Button, Space, QRCode } from 'antd'
 import { PrinterOutlined, DownloadOutlined, EyeOutlined, ShareAltOutlined } from '@ant-design/icons'
-import { Sale, DocumentType, PaymentMethod } from '@/types/api.types'
+import { Sale, DocumentType, PaymentMethod, SaleDetail } from '@/types/api.types'
 import { InvoiceGenerator } from '@/services/invoiceGenerator'
 import dayjs from 'dayjs'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -23,17 +24,57 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
 }) => {
   const { mode } = useTheme()
   
-  // Calcular totales
-  const subtotal = sale.detalles?.reduce((sum, detalle) => 
-    sum + (detalle.subtotal || detalle.cantidad * detalle.precioUnitario), 0
-  ) || 0
-  
-  const igv = subtotal * 0.18
-  const total = sale.total || subtotal + igv
+  // Calcular totales basados en los detalles
+  const calculateTotals = () => {
+    if (!sale.detalles || sale.detalles.length === 0) {
+      return { subtotal: 0, igv: 0, total: sale.total || 0 }
+    }
+    
+    const subtotal = sale.detalles.reduce((sum, detalle) => {
+      return sum + (detalle.subtotal || detalle.cantidad * detalle.precioUnitario)
+    }, 0)
+    
+    const igv = subtotal * 0.18
+    const total = subtotal + igv
+    
+    return { subtotal, igv, total }
+  }
+
+  const { subtotal, igv, total } = calculateTotals()
   
   // Formatear valores
-  const formatCurrency = InvoiceGenerator.formatCurrency
-  const getDocTypeText = () => sale.tipoDocumento === DocumentType.FACTURA ? 'FACTURA' : 'BOLETA DE VENTA'
+  const formatCurrency = (value: number) => {
+    return `S/. ${isNaN(value) ? '0.00' : value.toFixed(2)}`
+  }
+  
+  // Función para obtener el nombre del producto de manera segura
+  const getProductName = (detalle: SaleDetail): string => {
+    if (detalle.producto?.nombre) {
+      return detalle.producto.nombre
+    }
+    return `Producto ${detalle.productoId}`
+  }
+  
+  // Función para obtener el precio de manera segura
+  const getProductPrice = (detalle: SaleDetail): number => {
+    // Usar precioUnitario del detalle (es el precio de venta)
+    return detalle.precioUnitario || 0
+  }
+  
+  // Función para obtener el código del producto
+  const getProductCode = (detalle: SaleDetail): string => {
+    if (detalle.producto?.codigo) {
+      return detalle.producto.codigo
+    }
+    return `PROD-${detalle.productoId}`
+  }
+  
+  const getDocTypeText = () => {
+    return sale.tipoDocumento === DocumentType.FACTURA 
+      ? 'FACTURA' 
+      : 'BOLETA DE VENTA'
+  }
+  
   const getPaymentMethodText = () => {
     if (!sale.metodoPago) return 'EFECTIVO'
     return sale.metodoPago.toUpperCase()
@@ -126,10 +167,16 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
             <thead className={mode === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}>
               <tr>
                 <th className={`py-3 px-4 text-left font-semibold ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Cant.
+                  #
+                </th>
+                <th className={`py-3 px-4 text-left font-semibold ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Código
                 </th>
                 <th className={`py-3 px-4 text-left font-semibold ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   Descripción
+                </th>
+                <th className={`py-3 px-4 text-left font-semibold ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Cant.
                 </th>
                 <th className={`py-3 px-4 text-left font-semibold ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   P. Unitario
@@ -140,19 +187,38 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
               </tr>
             </thead>
             <tbody>
-              {sale.detalles?.map((detalle, index) => (
-                <tr 
-                  key={index} 
-                  className={`border-t ${mode === 'dark' ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  <td className="py-3 px-4">{detalle.cantidad}</td>
-                  <td className="py-3 px-4">{detalle.producto?.nombre || `Producto ${detalle.productoId}`}</td>
-                  <td className="py-3 px-4">{formatCurrency(detalle.precioUnitario)}</td>
-                  <td className="py-3 px-4 font-medium">
-                    {formatCurrency(detalle.subtotal || detalle.cantidad * detalle.precioUnitario)}
-                  </td>
-                </tr>
-              ))}
+              {sale.detalles?.map((detalle, index) => {
+                const productName = getProductName(detalle)
+                const productCode = getProductCode(detalle)
+                const productPrice = getProductPrice(detalle)
+                const cantidad = detalle.cantidad
+                const totalDetalle = detalle.subtotal || cantidad * productPrice
+                
+                return (
+                  <tr 
+                    key={detalle.id} 
+                    className={`border-t ${mode === 'dark' ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    <td className="py-3 px-4">{index + 1}</td>
+                    <td className="py-3 px-4 font-mono text-sm">{productCode}</td>
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="font-medium">{productName}</div>
+                        {detalle.producto?.marca && (
+                          <div className="text-xs text-gray-500">
+                            {detalle.producto.marca} {detalle.producto.modelo}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center">{cantidad}</td>
+                    <td className="py-3 px-4">{formatCurrency(productPrice)}</td>
+                    <td className="py-3 px-4 font-medium">
+                      {formatCurrency(totalDetalle)}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -192,11 +258,21 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
         </div>
       </div>
 
+      {/* Observaciones */}
+      <div className={`p-4 rounded-lg mb-8 ${mode === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+        <h3 className={`font-bold mb-2 ${mode === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+          OBSERVACIONES
+        </h3>
+        <p className={`text-sm ${mode === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+          • Los precios incluyen IGV<br/>
+          • Esta es una representación impresa del comprobante electrónico<br/>
+        </p>
+      </div>
+
       {/* Pie de página */}
       <div className={`text-center text-xs ${mode === 'dark' ? 'text-gray-500' : 'text-gray-400'} border-t pt-4 mt-6`}>
         <p>Representación impresa del comprobante de pago electrónico</p>
         <p>Autorizado mediante Resolución de Intendencia N° 034-005-0004434/SUNAT</p>
-        <p className="mt-2">Código Hash: {InvoiceGenerator.generateQRCodeData(sale).substring(0, 30)}...</p>
       </div>
 
       {/* Botones de acción */}

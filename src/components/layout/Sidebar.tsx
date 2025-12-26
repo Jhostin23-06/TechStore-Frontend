@@ -6,15 +6,18 @@ import {
   UserOutlined,
   AppstoreOutlined,
   ShoppingCartOutlined,
+  BarChartOutlined,
+  PieChartOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons'
 import { Link, useLocation } from 'react-router-dom'
-import { useTheme } from '@/contexts/ThemeContext' // Importa el hook
+import { useTheme } from '@/contexts/ThemeContext'
 
 const { Sider } = Layout
 
 const Sidebar: React.FC = () => {
   const location = useLocation()
-  const { mode } = useTheme() // Obtén el modo actual
+  const { mode } = useTheme()
 
   const menuItems = [
     {
@@ -42,6 +45,18 @@ const Sidebar: React.FC = () => {
       icon: <ShoppingCartOutlined />,
       label: <Link to="/sales">Ventas</Link>,
     },
+    {
+      key: 'reports',
+      icon: <BarChartOutlined />,
+      label: 'Reportes',
+      children: [
+        {
+          key: '/reports',
+          icon: <LineChartOutlined />,
+          label: <Link to="/reports">Todos los Reportes</Link>,
+        },
+      ],
+    },
   ]
 
   return (
@@ -52,7 +67,7 @@ const Sidebar: React.FC = () => {
       className={`sidebar border-r transition-colors duration-300 ${
         mode === 'dark' ? 'bg-gray-900' : 'bg-white'
       }`}
-      theme={mode === 'dark' ? 'dark' : 'light'} // Cambia dinámicamente
+      theme={mode === 'dark' ? 'dark' : 'light'}
     >
       <div className={`sidebar-logo h-16 flex items-center justify-center border-b ${
         mode === 'dark' ? 'border-gray-800' : 'border-gray-200'
@@ -64,9 +79,10 @@ const Sidebar: React.FC = () => {
         </h1>
       </div>
       <Menu
-        theme={mode === 'dark' ? 'dark' : 'light'} // Cambia dinámicamente
+        theme={mode === 'dark' ? 'dark' : 'light'}
         mode="inline"
         selectedKeys={[location.pathname]}
+        defaultOpenKeys={['reports']}
         items={menuItems}
         className="border-none px-2"
       />

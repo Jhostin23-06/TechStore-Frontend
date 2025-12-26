@@ -27,38 +27,38 @@ const Notifications: React.FC = () => {
 
   const { products } = useProducts()
 
-  useEffect(() => {
-    // Generar notificaciones basadas en datos
-    const newNotifications: Notification[] = []
+  // useEffect(() => {
+  //   // Generar notificaciones basadas en datos
+  //   const newNotifications: Notification[] = []
 
-    // Productos con bajo stock
-    const lowStockProducts = products.filter(p => p.stock < 10)
-    lowStockProducts.forEach(product => {
-      newNotifications.push({
-        id: Date.now() + product.id,
-        type: 'warning',
-        title: 'Stock Bajo',
-        message: `${product.nombre} tiene solo ${product.stock} unidades`,
-        time: dayjs().format('HH:mm'),
-        read: false,
-      })
-    })
+  //   // Productos con bajo stock
+  //   const lowStockProducts = products.filter(p => p.stock < 10)
+  //   lowStockProducts.forEach(product => {
+  //     newNotifications.push({
+  //       id: Date.now() + product.id,
+  //       type: 'warning',
+  //       title: 'Stock Bajo',
+  //       message: `${product.nombre} tiene solo ${product.stock} unidades`,
+  //       time: dayjs().format('HH:mm'),
+  //       read: false,
+  //     })
+  //   })
 
-    // Productos sin stock
-    const outOfStockProducts = products.filter(p => p.stock === 0)
-    outOfStockProducts.forEach(product => {
-      newNotifications.push({
-        id: Date.now() + product.id + 1000,
-        type: 'error',
-        title: 'Stock Agotado',
-        message: `${product.nombre} está agotado`,
-        time: dayjs().format('HH:mm'),
-        read: false,
-      })
-    })
+  //   // Productos sin stock
+  //   const outOfStockProducts = products.filter(p => p.stock === 0)
+  //   outOfStockProducts.forEach(product => {
+  //     newNotifications.push({
+  //       id: Date.now() + product.id + 1000,
+  //       type: 'error',
+  //       title: 'Stock Agotado',
+  //       message: `${product.nombre} está agotado`,
+  //       time: dayjs().format('HH:mm'),
+  //       read: false,
+  //     })
+  //   })
 
-    setNotifications(newNotifications)
-  }, [products])
+  //   setNotifications(newNotifications)
+  // }, [products])
 
   const unreadCount = notifications.filter(n => !n.read).length
 

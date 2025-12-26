@@ -86,62 +86,62 @@ const Dashboard: React.FC = () => {
 
   const realTrends = calculateRealTrends()
 
-  useEffect(() => {
-    if (!welcomeAlertShown.current && !isLoading) {
-      addAlert({
-        type: 'info',
-        title: '¡Bienvenido al Dashboard!',
-        message: `Total de ventas: ${stats.totalSales} | Total de productos: ${stats.totalProducts}`,
-        action: {
-          label: 'Ver Estadísticas',
-          onClick: () => showToast('info', 'Mostrando estadísticas completas...')
-        },
-        autoClose: 10,
-      })
-      welcomeAlertShown.current = true
-    }
-  }, [isLoading, stats.totalSales, stats.totalProducts, addAlert, showToast])
+  // useEffect(() => {
+  //   if (!welcomeAlertShown.current && !isLoading) {
+  //     addAlert({
+  //       type: 'info',
+  //       title: '¡Bienvenido al Dashboard!',
+  //       message: `Total de ventas: ${stats.totalSales} | Total de productos: ${stats.totalProducts}`,
+  //       action: {
+  //         label: 'Ver Estadísticas',
+  //         onClick: () => showToast('info', 'Mostrando estadísticas completas...')
+  //       },
+  //       autoClose: 10,
+  //     })
+  //     welcomeAlertShown.current = true
+  //   }
+  // }, [isLoading, stats.totalSales, stats.totalProducts, addAlert, showToast])
 
-  // ALERTA DE STOCK BAJO (solo cuando cambia)
-  useEffect(() => {
-    if (productosConStockBajo > 0 && !stockAlertShown.current) {
-      addAlert({
-        type: 'warning',
-        title: 'Stock Bajo Detectado',
-        message: `${productosConStockBajo} productos tienen stock bajo. Verificar inventario.`,
-        action: {
-          label: 'Ver Productos',
-          onClick: () => showToast('info', 'Redirigiendo a productos...')
-        },
-        autoClose: 10,
-      })
-      stockAlertShown.current = true
-    }
+  // // ALERTA DE STOCK BAJO (solo cuando cambia)
+  // useEffect(() => {
+  //   if (productosConStockBajo > 0 && !stockAlertShown.current) {
+  //     addAlert({
+  //       type: 'warning',
+  //       title: 'Stock Bajo Detectado',
+  //       message: `${productosConStockBajo} productos tienen stock bajo. Verificar inventario.`,
+  //       action: {
+  //         label: 'Ver Productos',
+  //         onClick: () => showToast('info', 'Redirigiendo a productos...')
+  //       },
+  //       autoClose: 10,
+  //     })
+  //     stockAlertShown.current = true
+  //   }
 
-    // Resetear si el stock bajo vuelve a 0
-    if (productosConStockBajo === 0) {
-      stockAlertShown.current = false
-    }
-  }, [productosConStockBajo, addAlert, showToast])
+  //   // Resetear si el stock bajo vuelve a 0
+  //   if (productosConStockBajo === 0) {
+  //     stockAlertShown.current = false
+  //   }
+  // }, [productosConStockBajo, addAlert, showToast])
 
-  // ALERTA DE VENTAS DEL DÍA
-  useEffect(() => {
-    if (!salesAlertShown.current && stats.totalSales > 0 && recentSales.length > 0) {
-      const todaySales = recentSales.filter(sale =>
-        dayjs(sale.fecha).isSame(dayjs(), 'day')
-      ).length
+  // // ALERTA DE VENTAS DEL DÍA
+  // useEffect(() => {
+  //   if (!salesAlertShown.current && stats.totalSales > 0 && recentSales.length > 0) {
+  //     const todaySales = recentSales.filter(sale =>
+  //       dayjs(sale.fecha).isSame(dayjs(), 'day')
+  //     ).length
 
-      if (todaySales > 0) {
-        addAlert({
-          type: 'success',
-          title: '¡Ventas del día!',
-          message: `Has realizado ${todaySales} ventas hoy.`,
-          autoClose: 8,
-        })
-        salesAlertShown.current = true
-      }
-    }
-  }, [stats.totalSales, recentSales.length, addAlert])
+  //     if (todaySales > 0) {
+  //       addAlert({
+  //         type: 'success',
+  //         title: '¡Ventas del día!',
+  //         message: `Has realizado ${todaySales} ventas hoy.`,
+  //         autoClose: 8,
+  //       })
+  //       salesAlertShown.current = true
+  //     }
+  //   }
+  // }, [stats.totalSales, recentSales.length, addAlert])
 
   // Columnas para tabla de ventas recientes
   const salesColumns = [
@@ -311,7 +311,7 @@ const Dashboard: React.FC = () => {
         {/* Segunda fila: Gráficos */}
         <Row gutter={[16, 16]} className="mb-6">
           <Col xs={24} lg={12}>
-            <SalesChart sales={recentSales} />
+            <SalesChart sales={allSales} />
           </Col>
 
           <Col xs={24} lg={12}>

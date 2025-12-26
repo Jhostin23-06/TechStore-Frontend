@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button, Card, Table, Tag, Statistic, Row, Col, Space, DatePicker, message } from 'antd'
 import { PlusOutlined, DollarOutlined, FilterOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useSales } from '@/hooks/useSales'
@@ -12,6 +12,9 @@ import dayjs from 'dayjs'
 import QueryBoundary from '@/components/common/QueryBoundary'
 import type { RangePickerProps } from 'antd/es/date-picker'
 import { useTheme } from '@/contexts/ThemeContext'
+import { enrichSaleData, SaleDataEnricher } from '@/utils/saleEnricher'
+import { SaleTagger } from '@/services/saleTagger'
+import { useQueryClient } from '@tanstack/react-query'
 
 const { RangePicker } = DatePicker
 
@@ -22,18 +25,33 @@ const SalesPage: React.FC = () => {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
 
-  const { 
-    sales, 
-    isLoading: salesLoading, 
-    isError: salesError, 
-    error: salesErrorObj, 
+  const {
+    sales,
+    isLoading: salesLoading,
+    isError: salesError,
+    error: salesErrorObj,
     createSale,
     isCreating,
-    refetch: refetchSales 
-  } = useSales()
+    refetch: refetchSales,
+    clients,
+    products,
+  } = useSales(
+    {
+      includeClientData: true,
+      includeProductData: true
+    }
+  )
 
-  const { clients, isLoading: clientsLoading } = useClients()
-  const { products, isLoading: productsLoading } = useProducts()
+  // También obtén clientes y productos por separado si es necesario
+  const { clients: allClients } = useClients()
+  const { products: allProducts } = useProducts()
+
+  const queryClient = useQueryClient();
+
+  const [dataEnricher, setDataEnricher] = useState<SaleDataEnricher | null>(null)
+
+  // const { clients, isLoading: clientsLoading } = useClients()
+  // const { products, isLoading: productsLoading } = useProducts()
 
   // Clases dinámicas basadas en el modo
   const textPrimary = mode === 'dark' ? 'text-gray-100' : 'text-gray-800'
@@ -41,23 +59,23 @@ const SalesPage: React.FC = () => {
   const cardBg = mode === 'dark' ? 'bg-gray-800' : 'bg-white'
   const cardBorder = mode === 'dark' ? 'border-gray-700' : 'border-gray-200'
   const hoverBg = mode === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-  const buttonPrimary = mode === 'dark' 
-    ? 'bg-green-700 hover:bg-green-600 border-green-600' 
+  const buttonPrimary = mode === 'dark'
+    ? 'bg-green-700 hover:bg-green-600 border-green-600'
     : 'bg-green-600 hover:bg-green-700 border-green-600'
 
   // Filtrar ventas por rango de fechas
-  const filteredSales = dateRange 
+  const filteredSales = dateRange
     ? sales.filter(sale => {
-        const saleDate = dayjs(sale.fecha)
-        return saleDate.isAfter(dateRange[0]) && saleDate.isBefore(dateRange[1])
-      })
+      const saleDate = dayjs(sale.fecha)
+      return saleDate.isAfter(dateRange[0]) && saleDate.isBefore(dateRange[1])
+    })
     : sales
 
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0)
   const todayRevenue = filteredSales
     .filter(sale => dayjs(sale.fecha).isSame(dayjs(), 'day'))
     .reduce((sum, sale) => sum + sale.total, 0)
-  
+
   // Ventas de hoy
   const todaySales = filteredSales
     .filter(sale => dayjs(sale.fecha).isSame(dayjs(), 'day'))
@@ -69,52 +87,48 @@ const SalesPage: React.FC = () => {
 
   const handleSubmit = async (data: CreateSale) => {
     try {
-      // Enviar venta al backend
-      const result = await createSale(data)
-      
-      // Generar datos de boleta en frontend
-      const invoiceData = InvoiceGenerator.generateDocumentNumber(
-        data.tipoDocumento || DocumentType.BOLETA
-      )
-      
-      // Crear objeto de venta completo con datos de boleta
-      const saleWithInvoice: Sale = {
-        ...result,
-        tipoDocumento: data.tipoDocumento || DocumentType.BOLETA,
-        serie: invoiceData.serie,
-        numeroDocumento: invoiceData.numero,
-        detalles: result.detalles || [],
-        // Los demás campos vienen del backend
+      // Guardar el tipo de documento que seleccionó el usuario
+      const selectedType = data.tipoDocumento || DocumentType.BOLETA
+
+      // Crear venta (sin tipoDocumento ya que el backend no lo acepta)
+      const saleData = {
+        ...data,
+        // No incluir tipoDocumento si el backend no lo acepta
+        // Pero guardamos la selección del usuario
       }
-      
-      message.success('✅ Venta registrada exitosamente')
+
+      console.log('📝 Creando venta. Tipo seleccionado:', selectedType)
+
+      // Crear venta en backend
+      const result = await createSale(saleData)
+
+      // ETIQUETAR la venta en frontend
+      const taggedSale = SaleTagger.tagSale(result, selectedType)
+
+      // Actualizar en cache
+      queryClient.setQueryData<Sale[]>(['sales'], (old = []) =>
+        old.map(s => s.id === taggedSale.id ? taggedSale : s)
+      )
+
+      message.success(`✅ ${selectedType === DocumentType.FACTURA ? 'Factura' : 'Boleta'} registrada exitosamente`)
       setIsModalOpen(false)
-      
-      // Mostrar boleta después de un breve delay
+
       setTimeout(() => {
-        setSelectedSale(saleWithInvoice)
+        setSelectedSale(taggedSale)
         setShowInvoice(true)
       }, 300)
-      
+
     } catch (error: any) {
       message.error(`❌ Error: ${error.message || 'No se pudo registrar la venta'}`)
       console.error('Error creating sale:', error)
     }
   }
 
-  // Función para ver boleta de ventas existentes
   const handleViewInvoice = (sale: Sale) => {
-    // Si la venta no tiene datos de boleta, generarlos
-    const saleWithInvoice: Sale = {
-      ...sale,
-      tipoDocumento: sale.tipoDocumento || DocumentType.BOLETA,
-      serie: sale.serie || 'B001',
-      numeroDocumento: sale.numeroDocumento || 
-        InvoiceGenerator.generateDocumentNumber().numero,
-      detalles: sale.detalles || []
-    }
-    
-    setSelectedSale(saleWithInvoice)
+    // Obtener venta etiquetada
+    const taggedSale = SaleTagger.getTaggedSale(sale)
+
+    setSelectedSale(taggedSale)
     setShowInvoice(true)
   }
 
@@ -165,18 +179,22 @@ const SalesPage: React.FC = () => {
       title: <span className={textSecondary}>Documento</span>,
       key: 'documento',
       render: (_: any, record: Sale) => {
-        const tipo = record.tipoDocumento === DocumentType.FACTURA ? 'Factura' : 'Boleta'
-        const serie = record.serie || 'B001'
-        const numero = record.numeroDocumento || '000001'
-        
+        const tipo = InvoiceGenerator.getDocumentTypeLabel(record.tipoDocumento)
+        const numeroFormateado = InvoiceGenerator.formatInvoiceNumber(record)
+
         return (
           <div>
             <Tag color={mode === 'dark' ? 'blue' : 'processing'} className="text-xs">
               {tipo}
             </Tag>
-            <div className={`text-xs mt-1 ${textSecondary}`}>
-              {serie}-{numero}
+            <div className={`text-xs mt-1 ${textSecondary} font-mono`}>
+              {numeroFormateado}
             </div>
+            {InvoiceGenerator.isTemporaryNumber(record.numeroDocumento || '') && (
+              <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                (temporal)
+              </div>
+            )}
           </div>
         )
       },
@@ -202,12 +220,12 @@ const SalesPage: React.FC = () => {
           tarjeta: { color: mode === 'dark' ? 'blue' : 'processing', text: 'TARJETA' },
           transferencia: { color: mode === 'dark' ? 'purple' : 'purple', text: 'TRANSFERENCIA' }
         }
-        
-        const config = tagConfig[method as keyof typeof tagConfig] || { 
-          color: mode === 'dark' ? 'default' : 'default', 
+
+        const config = tagConfig[method as keyof typeof tagConfig] || {
+          color: mode === 'dark' ? 'default' : 'default',
           text: method?.toUpperCase() || 'EFECTIVO'
         }
-        
+
         return (
           <Tag
             color={config.color}
@@ -247,15 +265,32 @@ const SalesPage: React.FC = () => {
     },
   ]
 
-  const isLoading = salesLoading || clientsLoading || productsLoading
+  const isLoading = salesLoading
   const isError = salesError
   const error = salesErrorObj
 
+  // Inicializar el enriquecedor cuando tengamos datos
+  useEffect(() => {
+    if (clients && products) {
+      setDataEnricher(new SaleDataEnricher(clients, products))
+    }
+  }, [clients, products])
+
+  // Funciones de enriquecimiento seguras
+  const enrichSaleForInvoice = (sale: Sale): Sale => {
+    if (dataEnricher) {
+      return dataEnricher.enrichSale(sale)
+    }
+
+    // Usar la función estática como fallback
+    return enrichSaleData(sale, allClients || [], allProducts || [])
+  }
+
   return (
-    <QueryBoundary 
-      isLoading={isLoading} 
-      isError={isError} 
-      error={error} 
+    <QueryBoundary
+      isLoading={isLoading}
+      isError={isError}
+      error={error}
       onRetry={refetchSales}
     >
       <div className="p-6">
@@ -348,7 +383,7 @@ const SalesPage: React.FC = () => {
         </Row>
 
         {/* Tabla de ventas */}
-        <Card 
+        <Card
           title={
             <div className="flex items-center justify-between">
               <span className={textPrimary}>
@@ -396,8 +431,8 @@ const SalesPage: React.FC = () => {
                 <div className="py-8 text-center">
                   <DollarOutlined className="text-3xl text-gray-400 mb-2" />
                   <div className={textSecondary}>No hay ventas registradas</div>
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     onClick={handleCreate}
                     className="mt-4"
                   >
@@ -415,8 +450,8 @@ const SalesPage: React.FC = () => {
           onClose={() => setIsModalOpen(false)}
           onSubmit={handleSubmit}
           isSubmitting={isCreating}
-          clients={clients}
-          products={products.filter(p => p.stock > 0)}
+          clients={allClients || []}
+          products={(allProducts || []).filter(p => p.stock > 0)}
         />
 
         {/* Modal de boleta */}

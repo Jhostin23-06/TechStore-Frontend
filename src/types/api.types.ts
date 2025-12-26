@@ -30,6 +30,7 @@ export interface Product {
   fechaRegistro: string
   categoria?: Category
   detallesVenta?: SaleDetail[]
+  
 }
 
 export interface Sale {

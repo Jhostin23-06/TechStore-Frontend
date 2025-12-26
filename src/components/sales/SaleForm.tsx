@@ -48,6 +48,22 @@ interface SaleFormProps {
     products: Product[]
 }
 
+const determineDocumentType = (cliente: Client | undefined): DocumentType => {
+    if (!cliente) return DocumentType.BOLETA
+
+    // Si tiene RUC (11 dígitos) -> Factura
+    if (cliente.dniRuc && cliente.dniRuc.length === 11) {
+        return DocumentType.FACTURA
+    }
+
+    // Si tiene DNI (8 dígitos) -> Boleta
+    if (cliente.dniRuc && cliente.dniRuc.length === 8) {
+        return DocumentType.BOLETA
+    }
+
+    return DocumentType.BOLETA
+}
+
 const SaleForm: React.FC<SaleFormProps> = ({
     open,
     onClose,
@@ -61,6 +77,8 @@ const SaleForm: React.FC<SaleFormProps> = ({
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
     const [cantidad, setCantidad] = useState<number>(1)
     const [tipoDocumento, setTipoDocumento] = useState<DocumentType>(DocumentType.BOLETA)
+
+
 
     const {
         control,
@@ -245,6 +263,14 @@ const SaleForm: React.FC<SaleFormProps> = ({
     // Filtrar productos con stock
     const productosConStock = products.filter(p => p.stock > 0)
 
+    useEffect(() => {
+        if (selectedClientId) {
+            const cliente = clients.find(c => c.id === selectedClientId)
+            const tipo = determineDocumentType(cliente)
+            setTipoDocumento(tipo)
+        }
+    }, [selectedClientId, clients])
+
     return (
         <Modal
             title="Nueva Venta"
@@ -338,10 +364,21 @@ const SaleForm: React.FC<SaleFormProps> = ({
                             </Form.Item>
 
                             <div className="mb-4">
-                                <DocumentTypeSelector
-                                    value={tipoDocumento}
-                                    onChange={setTipoDocumento}
-                                />
+                                <span className={labelClasses}>Tipo de Documento: </span>
+                                <Tag
+                                    color={tipoDocumento === DocumentType.FACTURA ? "purple" : "blue"}
+                                    className="ml-2"
+                                >
+                                    {tipoDocumento === DocumentType.FACTURA ? "FACTURA" : "BOLETA"}
+                                </Tag>
+                                <div className={`text-xs mt-1 ${mode === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {tipoDocumento === DocumentType.FACTURA
+                                        ? "Documento para clientes con RUC"
+                                        : "Documento para clientes con DNI"
+                                    }
+                                </div>
+                                {/* Campo oculto para enviar el tipo */}
+                                <input type="hidden" name="tipoDocumento" value={tipoDocumento} />
                             </div>
 
                         </Card>
